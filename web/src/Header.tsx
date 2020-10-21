@@ -1,19 +1,17 @@
 import React from 'react';
 
 // import { Container } from './styles';
+
 interface HeaderProps {
-    title: string
+    title?: string;
 }
 
 const Header: React.FC<HeaderProps> = (props) => {
-  const { title } = props;
-  
+    const { title } = props;
   return (
-      <div>
-          <header>
-                <strong>{title}</strong>
-          </header>
-      </div>
+      <header>
+          <h1>{title}</h1>
+      </header>
   );
 }
 

@@ -1,15 +1,13 @@
 import React from 'react';
 
-import Header from './Header';
-
 import './App.css';
+import Home from './pages/Home';
 
-
-const App = () => {
+function App() {
   return (
-    <>
-        <Header title="Header" />
-    </>   
+    <div>
+      <Home />
+    </div>
   );
 }
 
