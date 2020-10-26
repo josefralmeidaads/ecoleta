@@ -9,8 +9,8 @@ export async function up(knex: Knexx) {
         table.string('name').notNullable();
         table.string('email').notNullable();
         table.string('whatsapp').notNullable();
-        table.string('latitude').notNullable();
-        table.string('longitude').notNullable();
+        table.float('latitude').notNullable();
+        table.float('longitude').notNullable();
         table.string('city').notNullable();
         table.string('uf', 2).notNullable();
    });

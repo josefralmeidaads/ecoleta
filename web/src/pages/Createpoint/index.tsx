@@ -1,8 +1,11 @@
 import React, { useEffect, useState, ChangeEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useHistory } from 'react-router-dom';
 import {FiArrowLeft} from 'react-icons/fi';
 import { Map, TileLayer, Marker, Popup } from 'react-leaflet';
+import { LeafletMouseEvent } from 'leaflet';
 import axios from 'axios';
+import { toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 import './styles.css';
 import logo from '../../assets/logo.svg';
@@ -26,22 +29,33 @@ interface UFSProps {
 }
 
 interface IBGECidade {
-  microrregiao: {
-    nome: string;
-  }
-}
-
-interface CidadeProps {
-  microrregiao: {
-    nome: string;
-  }
+      nome: string,
 }
 
 const Createpoint: React.FC = () => {
-  const [items, setItems] = useState<ItemProps[]>([]);
-  const [ufs, setUfs] = useState<UFSProps[]>([]);
-  const [cidades, setCidades] = useState<string[]>([]);
-  const [selectedUf, setSelectedUfs] = useState('');
+  toast.configure();
+
+  const [ items, setItems] = useState<ItemProps[]>([]);
+  const [ ufs, setUfs] = useState<UFSProps[]>([]);
+  const [ cidades, setCidades] = useState<string[]>([]);
+  const [ selectedUf, setSelectedUfs] = useState('0');
+  const [ selectedCidade, setSelectedCidade] = useState('0');
+  const [ position, setPosition] = useState<[number, number]>([0,0]);
+  const [ initialPosition, setInitialPosition] = useState<[number, number]>([0,0]);
+  const [ formData, setFormData ] = useState({
+    name: '',
+    email: '',
+    whatsapp: '',
+  })
+  const [selectedItem, setSelectedItem] = useState<number[]>([]);
+  const history = useHistory();
+
+  useEffect(() => {
+    navigator.geolocation.getCurrentPosition(position => {
+      const { latitude, longitude } = position.coords ;
+      setInitialPosition([ latitude,longitude ]);
+    })
+  }, [])
 
   useEffect(() => {
     const loadItems = async() => {
@@ -54,31 +68,82 @@ const Createpoint: React.FC = () => {
 
   useEffect(() => {
     const loadUF = async() => {
-      const response = await axios.get('https://servicodados.ibge.gov.br/api/v1/localidades/estados');
-      setUfs(response.data);
+      const response = await axios.get<UFSProps[]>('https://servicodados.ibge.gov.br/api/v1/localidades/estados');
+      const ordenado = response.data.sort(function(a , b){return a.nome < b.nome ? -1: a.nome > b.nome ? 1: 0;})
+      setUfs(ordenado);
     }
 
     loadUF();
   }, [])
 
   useEffect(() => {
+
+    if (selectedUf === '0'){
+      return; 
+    }
+
     const loadCidade = async() => {
       const response = await axios.get<IBGECidade[]>(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${selectedUf}/municipios`)
-      const cidades = response.data.map(cidade => cidade.microrregiao.nome);
-      setCidades(cidades)
+      const cidades = response.data.map( cidade => cidade.nome)
+      setCidades(cidades);
     }
 
     loadCidade();
   }, [selectedUf])
 
-  const [position, setPosition] = useState({
-    lat: -21.216181,
-    lng: -42.888112,
-    zoom: 16,
-  })
 
   const handleSelectUf = (e:React.ChangeEvent<HTMLSelectElement>) => {
     setSelectedUfs(e.target.value);
+  }
+
+  const handleSelectCidade = (e:React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedCidade(e.target.value);
+  }
+
+  const handlePosition = (e:LeafletMouseEvent) => {
+    setPosition([e.latlng.lat, e.latlng.lng])
+  }
+
+  const handleChange = (e:React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData({...formData, [name]: value });
+  }
+
+  const handleSelectItem = (id:number) => {
+    //findIndex irá procurar se o meu item é igual ao meu id que stou selecionando, se for ele me retorna 0 se não existir esse número
+    //ele me retorna -1 ai então adiciono se não existir, e removo se existir
+    const alreadySelected = selectedItem.findIndex(item => item === id );
+    
+    if (alreadySelected >= 0){
+      const filteredItem = selectedItem.filter(item => item !== id);
+      setSelectedItem(filteredItem)
+    } else {
+      setSelectedItem([...selectedItem, id]);
+    }
+
+  }
+
+  const handleCreatePoint = async(e:React.FormEvent) => {
+    e.preventDefault()
+    const { name, email, whatsapp } = formData;
+    const [latitude, longitude] = position;
+    const city = selectedCidade;
+    const uf = selectedUf;
+    const items = selectedItem;
+
+    const data = {
+      name, email, whatsapp, latitude, longitude, city, uf, items
+    }
+    
+    try{
+      await api.post('/points',data);
+      toast.success('Cadastro realizado com Sucesso!', {autoClose: 5000});
+      history.push('/');
+    }catch(e)
+    {
+      toast.error(e, {autoClose: 10000});
+    }
+    
   }
 
   return (
@@ -92,7 +157,7 @@ const Createpoint: React.FC = () => {
           </Link>
         </header>
 
-        <form>
+        <form onSubmit={handleCreatePoint}>
           <h1>Cadastro do <br /> ponto de coleta</h1>
 
           <fieldset>
@@ -106,6 +171,7 @@ const Createpoint: React.FC = () => {
                 type="text"
                 name="name"
                 id="name"
+                onChange={handleChange}
               />
             </div>
 
@@ -116,6 +182,7 @@ const Createpoint: React.FC = () => {
                   type="email"
                   name="email"
                   id="email"
+                  onChange={handleChange}
                 />
               </div>
 
@@ -125,6 +192,7 @@ const Createpoint: React.FC = () => {
                   type="number"
                   name="whatsapp"
                   id="whatsapp"
+                  onChange={handleChange}
                 />
                 </div>
             </div>
@@ -136,7 +204,7 @@ const Createpoint: React.FC = () => {
               <span>Selecione o endereço do mapa</span>
             </legend>
 
-            <Map center={position} zoom={position.zoom}>
+            <Map center={initialPosition} zoom={16} onclick={handlePosition}>
               <TileLayer
                 attribution='&amp;copy <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -153,7 +221,7 @@ const Createpoint: React.FC = () => {
                <div className="field">
                  <label htmlFor="uf">Estado (UF)</label>
                  <select onChange={handleSelectUf} value={selectedUf} name="uf" id="uf">
-                 <option value={-1}>Selecione uma UF</option>
+                 <option value={'0'}>Selecione uma UF</option>
                   {ufs.map( uf => (
                      <option key={uf.id} value={uf.sigla}>{uf.nome}</option>
                    ))}
@@ -162,11 +230,11 @@ const Createpoint: React.FC = () => {
  
                <div className="field">
                  <label htmlFor="city">Cidade</label>
-                 <select name="city" id="city">
+                 <select value={selectedCidade} onChange={handleSelectCidade} name="city" id="city">
                  <option value={'0'}>Selecione uma Cidade</option>
-                 {cidades.map( cidade => (
+                 {cidades.map( (cidade,) => (
                      <option key={cidade} value={cidade}>{cidade}</option>
-                   ))}
+                 ))}
                  </select>
                </div>
             </div>
@@ -180,7 +248,11 @@ const Createpoint: React.FC = () => {
 
             <ul className="items-grid">
               {items.map( item => (
-                <li key={item.id}>
+                <li 
+                  key={item.id} 
+                  onClick={() => {handleSelectItem(item.id)}}
+                  className={selectedItem.includes(item.id) ? 'selected' : ''}
+                >
                   <img src={item.image_url} alt="" />
                   <span>{item.title}</span>
                 </li>
